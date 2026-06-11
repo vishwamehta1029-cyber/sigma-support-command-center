@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sigma Support Command Center</title>
+  <style>
+    body { margin:0; font-family: Inter, Arial, sans-serif; background:#0f172a; color:#e5e7eb; }
+    header { padding:20px 28px; background:#111827; border-bottom:1px solid #334155; }
+    h1 { margin:0; font-size:26px; }
+    .sub { color:#94a3b8; margin-top:6px; }
+    .grid { display:grid; grid-template-columns:320px 1fr; gap:18px; padding:20px; }
+    .card { background:#111827; border:1px solid #334155; border-radius:14px; padding:16px; }
+    .ticket { padding:14px; border-radius:10px; background:#1e293b; margin-bottom:10px; cursor:pointer; border:1px solid transparent; }
+    .ticket:hover, .ticket.active { border-color:#38bdf8; background:#0f2537; }
+    .badge { padding:4px 8px; border-radius:999px; font-size:12px; }
+    .high { background:#7f1d1d; color:#fecaca; }
+    .medium { background:#78350f; color:#fde68a; }
+    .low { background:#14532d; color:#bbf7d0; }
+    textarea { width:100%; min-height:155px; background:#020617; color:#d1fae5; border:1px solid #334155; border-radius:10px; padding:12px; font-family:monospace; }
+    button { background:#38bdf8; color:#082f49; border:0; border-radius:10px; padding:10px 14px; font-weight:700; cursor:pointer; }
+    button:hover { background:#7dd3fc; }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+    .stat { background:#1e293b; padding:14px; border-radius:12px; }
+    .stat strong { display:block; font-size:24px; margin-top:6px; }
+    .ok { color:#86efac; }
+    .warn { color:#facc15; }
+    .bad { color:#f87171; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; }
+    th, td { border-bottom:1px solid #334155; padding:10px; text-align:left; }
+    th { color:#93c5fd; }
+    .split { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+    pre { background:#020617; border:1px solid #334155; padding:12px; border-radius:10px; white-space:pre-wrap; }
+    canvas { background:#020617; border-radius:12px; width:100%; height:240px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Sigma Support Command Center</h1>
+    <div class="sub">Interactive technical support engineering project: SQL debugging, query analysis, data validation, SaaS monitoring, and customer issue resolution.</div>
+  </header>
+
+  <main class="grid">
+    <section class="card">
+      <h2>Customer Tickets</h2>
+      <div id="tickets"></div>
+    </section>
+
+    <section>
+      <div class="stats">
+        <div class="stat">API Latency<strong id="latency">212ms</strong></div>
+        <div class="stat">Query Queue<strong id="queue">18</strong></div>
+        <div class="stat">Error Rate<strong id="errors" class="warn">1.8%</strong></div>
+        <div class="stat">Warehouse CPU<strong id="cpu" class="bad">87%</strong></div>
+      </div>
+
+      <div class="card" style="margin-top:16px;">
+        <h2 id="ticketTitle">Select a ticket</h2>
+        <p id="ticketDescription" class="sub"></p>
+
+        <h3>SQL Diagnostic Workspace</h3>
+        <textarea id="sqlBox"></textarea>
+        <br><br>
+        <button onclick="runDiagnostics()">Run Diagnostics</button>
+
+        <div class="split">
+          <div>
+            <h3>Query Plan Analysis</h3>
+            <pre id="plan">No query analyzed yet.</pre>
+          </div>
+          <div>
+            <h3>Recommended Fix</h3>
+            <pre id="fix">Select a ticket and run diagnostics.</pre>
+          </div>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="card">
+          <h3>Data Validation</h3>
+          <table>
+            <thead>
+              <tr><th>Metric</th><th>Source</th><th>Dashboard</th><th>Status</th></tr>
+            </thead>
+            <tbody id="validation"></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3>Revenue Visualization</h3>
+          <canvas id="chart" width="600" height="240"></canvas>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+const tickets = [
+  {
+    id: "T-1001",
+    issue: "Dashboard loading slowly",
+    priority: "High",
+    description: "Customer reports that the executive revenue dashboard takes 45 seconds to load.",
+    sql: `SELECT
+  customers.customer_name,
+  SUM(orders.amount) AS total_revenue
+FROM customers
+JOIN orders
+  ON customers.id = orders.customer_id
+GROUP BY customers.customer_name
+ORDER BY total_revenue DESC;`,
+    plan: `QUERY PLAN:
+- Sequential scan on orders: 12.8M rows
+- Hash join with customers
+- Full aggregation before filtering
+- Sort operation on large result set
+
+BOTTLENECK:
+The query scans the entire orders table and aggregates all customers before limiting the dashboard view.`,
+    fix: `Recommended optimization:
+1. Add a date filter for the dashboard period.
+2. Pre-aggregate revenue by customer and month.
+3. Cluster or partition orders by order_date.
+4. Limit dashboard queries to required fields only.
+
+Optimized SQL:
+
+WITH monthly_revenue AS (
+  SELECT
+    customer_id,
+    DATE_TRUNC('month', order_date) AS month,
+    SUM(amount) AS total_revenue
+  FROM orders
+  WHERE order_date >= CURRENT_DATE - INTERVAL '12 months'
+  GROUP BY customer_id, DATE_TRUNC('month', order_date)
+)
+SELECT
+  c.customer_name,
+  SUM(m.total_revenue) AS total_revenue
+FROM monthly_revenue m
+JOIN customers c
+  ON c.id = m.customer_id
+GROUP BY c.customer_name
+ORDER BY total_revenue DESC;`
+  },
+  {
+    id: "T-1002",
+    issue: "Revenue numbers do not match",
+    priority: "Medium",
+    description: "Finance team says dashboard revenue is lower than the source-of-truth warehouse table.",
+    sql: `SELECT
+  DATE_TRUNC('month', order_date) AS month,
+  SUM(amount) AS revenue
+FROM orders
+WHERE status = 'completed'
+GROUP BY DATE_TRUNC('month', order_date);`,
+    plan: `QUERY PLAN:
+- Filter excludes refunded transactions
+- Dashboard logic does not match finance definition
+- Revenue model missing adjustment layer
+
+ROOT CAUSE:
+Finance uses gross revenue minus refunds. Dashboard only includes completed orders.`,
+    fix: `Recommended fix:
+Create a governed revenue model with explicit business logic.
+
+Corrected SQL:
+
+SELECT
+  DATE_TRUNC('month', order_date) AS month,
+  SUM(
+    CASE
+      WHEN status = 'completed' THEN amount
+      WHEN status = 'refunded' THEN -amount
+      ELSE 0
+    END
+  ) AS net_revenue
+FROM orders
+GROUP BY DATE_TRUNC('month', order_date);`
+  },
+  {
+    id: "T-1003",
+    issue: "User cannot access workspace",
+    priority: "High",
+    description: "Admin reports that a user receives a permissions error when opening a shared workbook.",
+    sql: `SELECT
+  user_id,
+  role,
+  workspace_id,
+  permission_level
+FROM workspace_permissions
+WHERE user_id = 4821;`,
+    plan: `ACCESS CHECK:
+- User exists
+- User has Viewer role
+- Workbook requires Editor role
+- Group sync completed 2 hours ago
+
+ROOT CAUSE:
+User belongs to the wrong identity group.`,
+    fix: `Recommended fix:
+1. Confirm expected access level with workspace admin.
+2. Add user to the correct SSO group.
+3. Trigger identity provider sync.
+4. Ask user to log out and back in.
+
+Support note:
+Document the incident pattern as "SSO group mismatch causing workbook access failure."`
+  }
+];
+
+let selected = tickets[0];
+
+function renderTickets() {
+  const box = document.getElementById("tickets");
+  box.innerHTML = "";
+  tickets.forEach(t => {
+    const div = document.createElement("div");
+    div.className = "ticket" + (t.id === selected.id ? " active" : "");
+    div.innerHTML = `
+      <strong>${t.id}</strong><br>
+      ${t.issue}<br><br>
+      <span class="badge ${t.priority.toLowerCase()}">${t.priority}</span>
+    `;
+    div.onclick = () => selectTicket(t);
+    box.appendChild(div);
+  });
+}
+
+function selectTicket(ticket) {
+  selected = ticket;
+  document.getElementById("ticketTitle").textContent = `${ticket.id}: ${ticket.issue}`;
+  document.getElementById("ticketDescription").textContent = ticket.description;
+  document.getElementById("sqlBox").value = ticket.sql;
+  document.getElementById("plan").textContent = "Ready to analyze.";
+  document.getElementById("fix").textContent = "Run diagnostics to generate recommendations.";
+  renderTickets();
+}
+
+function runDiagnostics() {
+  document.getElementById("plan").textContent = selected.plan;
+  document.getElementById("fix").textContent = selected.fix;
+  renderValidation();
+  drawChart();
+}
+
+function renderValidation() {
+  const rows = [
+    ["January Revenue", "$120,000", "$105,000", "Mismatch"],
+    ["February Revenue", "$142,000", "$142,000", "Matched"],
+    ["March Revenue", "$158,000", "$151,000", "Mismatch"],
+    ["Active Users", "18,420", "18,420", "Matched"]
+  ];
+
+  document.getElementById("validation").innerHTML = rows.map(r => {
+    const cls = r[3] === "Matched" ? "ok" : "bad";
+    return `<tr>
+      <td>${r[0]}</td>
+      <td>${r[1]}</td>
+      <td>${r[2]}</td>
+      <td class="${cls}">${r[3]}</td>
+    </tr>`;
+  }).join("");
+}
+
+function drawChart() {
+  const canvas = document.getElementById("chart");
+  const ctx = canvas.getContext("2d");
+  const data = [120, 142, 158, 171, 190, 225];
+  const labels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun"];
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#020617";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const max = Math.max(...data);
+  const barWidth = 60;
+  const gap = 35;
+  const startX = 45;
+
+  data.forEach((value, i) => {
+    const height = (value / max) * 160;
+    const x = startX + i * (barWidth + gap);
+    const y = 190 - height;
+
+    ctx.fillStyle = "#38bdf8";
+    ctx.fillRect(x, y, barWidth, height);
+
+    ctx.fillStyle = "#e5e7eb";
+    ctx.font = "14px Arial";
+    ctx.fillText(labels[i], x + 16, 218);
+    ctx.fillText(`$${value}k`, x + 6, y - 8);
+  });
+}
+
+function updateMonitoring() {
+  document.getElementById("latency").textContent = `${180 + Math.floor(Math.random() * 160)}ms`;
+  document.getElementById("queue").textContent = 10 + Math.floor(Math.random() * 35);
+  document.getElementById("errors").textContent = `${(Math.random() * 3).toFixed(1)}%`;
+  document.getElementById("cpu").textContent = `${65 + Math.floor(Math.random() * 30)}%`;
+}
+
+renderTickets();
+selectTicket(selected);
+renderValidation();
+drawChart();
+setInterval(updateMonitoring, 2500);
+</script>
+</body>
+</html>
